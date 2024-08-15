@@ -31,18 +31,18 @@ else
 	OS_DIR = /
 endif
 
-output: main.c RGFW.h util.h
+rgfw-c8: main.c RGFW.h util.h
 	$(CC) $< $(LIBS) $(WARNINGS) -o $@
 
 clean:
-	rm -f output
+	rm -f rgfw-c8
 
 ROMS := $(wildcard roms/*.ch8)
 
-debug: output
+debug: rgfw-c8
 	make clean
 	make
 	@for rom in $(ROMS); do \
 		echo "Running $$rom..."; \
-		./output $$rom; \
+		./rgfw-c8 $$rom; \
 	done
