@@ -31,12 +31,13 @@ else
 	OS_DIR = /
 endif
 
-output: main.c RGFW.h
+output: main.c RGFW.h util.h
 	$(CC) $< $(LIBS) $(WARNINGS) -o $@
 
 clean:
 	rm -f output
 
 debug: output
-	./output $(ROM)
 	make clean
+	make
+	./output $(ROM)

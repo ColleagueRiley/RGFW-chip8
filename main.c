@@ -1,9 +1,6 @@
 /*
 	TODO :
 	- fix bugs and make sure everything actually works
-	- upscale rendering (so the window can be bigger than 64x32
-	- run sound/delay timer
-	- cap framerate? 
 	
 	- handle program end properly
 	handle instructions:
@@ -26,7 +23,7 @@ int main(int argc, char** argv) {
 		fprintf(stderr, "No input rom\n");
 		return -1;
 	}
-
+	
 	FILE* f = fopen(argv[1], "rb");
 
 	fseek(f, 0L, SEEK_END);
@@ -41,14 +38,15 @@ int main(int argc, char** argv) {
 	RGFW_setBufferSize(RGFW_AREA(SCREEN_WIDTH, SCREEN_HEIGHT));
 	RGFW_window* win = RGFW_createWindow("RGFW Chip-8", RGFW_RECT(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), RGFW_CENTER | RGFW_NO_RESIZE); 
 
-	clear(win->buffer);
 
+	clear(win->buffer);
+	
 	u16 PC = 0;
 	u8 registers[16];
 	u16 stack[16];
 	u8 stack_layer = 0;
-	u8 delay_timer;
-	u8 sound_timer;
+	u8 delay_timer = 0;
+	u8 sound_timer = 0;
 	u16 I;
 
 	i8 waitForKey = 0;
@@ -75,12 +73,22 @@ int main(int argc, char** argv) {
 		RGFW_window_swapBuffers(win);
 		u16 opcode = (memory[PC] << 8) | memory[PC + 1];
 		
-		//if (PC == size || waitForKey != -1)
-		//	continue;
-	
+		/*
+		if (PC == size || waitForKey != -1) {
+			RGFW_window_checkFPS(win, 60);
+			continue;
+		}
+		*/
+
 		if (PC < size) {
 			PC += 2;
 		}
+		
+		if (sound_timer)
+			sound_timer--;
+		
+		if (delay_timer)
+			delay_timer--;
 
 		u16 X = (opcode & 0x0F00) >> 8;
 		u16 Y = (opcode & 0x00F0) >> 4;
@@ -185,7 +193,7 @@ int main(int argc, char** argv) {
 					for(x = 0; x < 8; x++) {
 						u8 pixel = (pixel_row & 0x80) >> x;
 						printf("0x%x\n", pixel_row);
-						if (drawPixel(win->buffer, registers[X] + x, registers[Y] + y, pixel * 255)) 
+						if (drawPixel(win->buffer, registers[X] + x, registers[Y] + y, pixel * 255, 0)) 
 							registers[15] = 1;
 					}
 				}
@@ -239,6 +247,8 @@ int main(int argc, char** argv) {
 				break;
 			default: break;
 		}
+			
+		RGFW_window_checkFPS(win, 60);
 	}
 
 	RGFW_window_close(win);

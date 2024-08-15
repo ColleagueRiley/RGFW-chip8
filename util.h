@@ -3,9 +3,13 @@
 #include "RGFW.h"
 #endif
 
+#define SCREEN_SCALE 10 
 
-#define SCREEN_WIDTH  64
-#define SCREEN_HEIGHT 32
+#define C8_SCREEN_WIDTH 64
+#define C8_SCREEN_HEIGHT 32 
+
+#define SCREEN_WIDTH C8_SCREEN_WIDTH * SCREEN_SCALE
+#define SCREEN_HEIGHT C8_SCREEN_HEIGHT * SCREEN_SCALE
 
 RGFW_ENUM(u8, c8_key) {
 	c8_0 = 0, c8_1, c8_2, c8_3, c8_4, c8_5, c8_6, c8_9, 
@@ -42,25 +46,33 @@ const u8 fontset[FONT_SIZE] = {
 	0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 };
 
-b8 drawPixel(u8* buffer, u32 x, u32 y, u8 color) {
-	size_t offset = ((y * SCREEN_WIDTH) + x) * 4;
+b8 drawPixel(u8* buffer, u32 x, u32 y, u8 color, u8 force) {
+	x *=  SCREEN_SCALE;
+	y *= SCREEN_SCALE;
 	
-	buffer[offset + 3] = 0xFF;
-
-	if (buffer[offset] == color)
+	size_t offset = ((y * SCREEN_WIDTH) + x) * 4;
+	if (buffer[offset] == color && force == RGFW_FALSE)
 		return RGFW_FALSE;
+	
+	u32 X, Y; 
+	for (Y = 0; Y < SCREEN_SCALE; Y++) {
+		for (X = 0; X < SCREEN_SCALE; X++) {
+			offset = (((y + Y) * SCREEN_WIDTH) + (x + X)) * 4;
+			buffer[offset] = color;
+			buffer[offset + 1] = color;
+			buffer[offset + 2] = color;
+			buffer[offset + 3] = 0xFF;
+		}
+	}
 
-	buffer[offset] = color;
-	buffer[offset + 1] = color;
-	buffer[offset + 2] = color;
 	return RGFW_TRUE;
 }
 
 void clear(u8* buffer) {
 	u32 x, y;
-	for (y = 0; y < SCREEN_HEIGHT; y++) {
-		for (x = 0; x < SCREEN_WIDTH; x++) {
-			drawPixel(buffer, x, y, 0);
+	for (y = 0; y < C8_SCREEN_HEIGHT; y++) {
+		for (x = 0; x < C8_SCREEN_WIDTH; x++) {
+			drawPixel(buffer, x, y, 0, 1);
 		}
 	}
 }
