@@ -26,10 +26,10 @@ int main(int argc, char** argv) {
 	size_t size = ftell(f);
 	fseek(f, 0L, SEEK_SET);
 
-	fread(&memory, 1, size, f);
+	fread(&memory[ROM_ADDRESS], 1, size, f);
 	fclose(f);
 
-	memcpy(&memory[size], fontset, FONT_SIZE);
+	memcpy(&memory[FONT_ADDRESS], fontset, FONT_SIZE);
 	
 	srand(time(NULL));
 
@@ -38,11 +38,12 @@ int main(int argc, char** argv) {
 
 
 	clear(win->buffer);
-	
-	u16 PC = 0;
+	RGFW_window_swapBuffers(win);
+
+	u16 PC = 0x200;
 	u8 registers[16];
 	u16 stack[16];
-	u8 stack_layer = 0;
+	u8 stack_pointer = 0;
 	u8 delay_timer = 0;
 	u8 sound_timer = 0;
 	u16 I;
@@ -67,9 +68,7 @@ int main(int argc, char** argv) {
 				defualt: break;	
 			}
 		}
-		
-		RGFW_window_swapBuffers(win);
-		
+				
 		u16 opcode = (memory[PC] << 8) | memory[PC + 1];
 			
 		if (waitForKey != -1) {
@@ -80,7 +79,7 @@ int main(int argc, char** argv) {
 		if (PC < size) {
 			PC += 2;
 		} else {
-			printf("warning: reached end of program\n");
+			//printf("warning: reached end of program\n");
 		}
 		
 		if (sound_timer)
@@ -91,8 +90,8 @@ int main(int argc, char** argv) {
 			beep();
 		}
 
-		u16 X = (opcode & 0x0F00) >> 8;
-		u16 Y = (opcode & 0x00F0) >> 4;
+		u16 X = (opcode & 0x0F00);
+		u16 Y = (opcode & 0x00F0);
 		u16 N = (opcode & 0x000F);
 		u16 NN = (opcode & 0x00FF);
 		i16 NNN = (opcode & 0x0FFF); 
@@ -102,16 +101,17 @@ int main(int argc, char** argv) {
 				switch (NN) {
 					case 0xE0: { // 00E0 | clear()
 						clear(win->buffer);
+						RGFW_window_swapBuffers(win);
 						break;
 					}
 					case 0xEE: // 00EE | return 
-						if (stack_layer) {
-							stack_layer--;
-							PC = stack[stack_layer];
+						if (stack_pointer) {
+							stack_pointer--;
+							PC = stack[stack_pointer];
 						}
 						break;
 					default: // 0NNN | RCA 1802 at address NNN
-						printf("Warning: Unhandled: 0NNN 0 %i\n", NNN);
+						//printf("Warning: Unhandled: 0NNN 0 %i\n", NNN);
 						break;
 				}
 				break;
@@ -119,9 +119,9 @@ int main(int argc, char** argv) {
 				PC = NNN;
 				break;
 			case 0x2000: // 2NNN | call function at NNN *(NNN)()
-				stack[stack_layer] = PC;
+				stack[stack_pointer] = PC;
 				PC = NNN;
-				stack_layer++;
+				stack_pointer++;
 				break;
 			case 0x3000: // 3XNN | if (Vx == NN)
 				if (registers[X] == NN)
@@ -224,16 +224,20 @@ int main(int argc, char** argv) {
 			case 0xD000: { // DXYN | draw(Vx, Vy, N)
 				size_t x, y;
 				u8 pixel_row;
-				break;
+				
 				for (y = 0; y < 8; y++) {
 					pixel_row = memory[I + y];
 					for(x = 0; x < 8; x++) {
 						u8 pixel = (pixel_row & (0x80 >> x));
+						
 						printf("0x%x\n", pixel_row);
+						printf("%i %i\n", registers[X] + x, registers[Y] + y);
 						if (drawPixel(win->buffer, registers[X] + x, registers[Y] + y, pixel * 255, 0)) 
 							registers[15] = 1;
 					}
 				}
+				
+				RGFW_window_swapBuffers(win);
 				break;
 			}
 			case 0xE000:
@@ -277,9 +281,13 @@ int main(int argc, char** argv) {
 						break;
 					case 0x55: // FX55 | reg_dump(Vx, &I);
 						memcpy(&memory[I], registers, X);
+						
+						if (oldFlag) I += X + 1;
 						break;
 					case 0x65: // FX65 | reg_load(Vx, &I);
 						memcpy(registers, &memory[I], X);
+						
+						if (oldFlag) I += X = 1;
 						break;
 					default: break;
 				}

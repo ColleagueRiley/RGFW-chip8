@@ -3,7 +3,10 @@
 #include "RGFW.h"
 #endif
 
-#define SCREEN_SCALE 10 
+#define ROM_ADDRESS 0x200
+#define FONT_ADDRESS 0x50
+
+#define SCREEN_SCALE 10
 
 #define C8_SCREEN_WIDTH 64
 #define C8_SCREEN_HEIGHT 32 
@@ -64,7 +67,7 @@ b8 drawPixel(u8* buffer, u32 x, u32 y, u8 color, u8 force) {
 			buffer[offset + 3] = 0xFF;
 		}
 	}
-
+	
 	return RGFW_TRUE;
 }
 
