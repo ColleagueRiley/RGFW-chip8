@@ -22,6 +22,13 @@ RGFW_ENUM(u8, c8_key) {
 
 u8 c8_keymap[c8_last] = { 0 };
 
+u8 RGFW_c8_LUT[] =  {
+	[RGFW_1] = 0x1, [RGFW_2] = 0x2, [RGFW_3] = 0x3, [RGFW_4] = 0xC,
+	[RGFW_q] = 0x4, [RGFW_w] = 0x5,  [RGFW_e] = 0x6, [RGFW_r] = 0xD,  
+	[RGFW_a] = 0x7, [RGFW_s] = 0x8, [RGFW_d] = 0x9, [RGFW_f] = 0xE,
+	[RGFW_z] = 0xA, [RGFW_x] = 0x0, [RGFW_c] = 0xB, [RGFW_v] = 0xF
+};
+
 int main(int argc, char** argv) {
 	if (argc <= 1) {
 		fprintf(stderr, "No input rom\n");
@@ -57,14 +64,23 @@ int main(int argc, char** argv) {
 	u8 sound_timer;
 	u16 I;
 
-	u32 keyPress = 0;
+	i8 waitForKey = 0;
 
 	while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
 		while (RGFW_window_checkEvent(win) != NULL); {
 			switch (win->event.type) {
 				case RGFW_quit: break;
 				case RGFW_keyPressed:
-					keyPress = 1;
+					c8_keymap[ RGFW_c8_LUT[win->event.keyCode] ] = 1;
+				
+					if (waitForKey != -1) {
+						registers[waitForKey] = RGFW_c8_LUT[win->event.keyCode]; 
+						waitForKey = -1;
+					}
+					break;
+				case RGFW_keyReleased:
+					c8_keymap[ RGFW_c8_LUT[win->event.keyCode] ] = 0;
+					break;
 				defualt: break;	
 			}
 		}
@@ -72,6 +88,9 @@ int main(int argc, char** argv) {
 		RGFW_window_swapBuffers(win);
 		u16 opcode = (memory[PC] << 8) | memory[PC + 1];
 		
+		if (PC == size || waitForKey != -1)
+			continue;
+	
 		if (PC < size) {
 			PC += 2;
 		}
@@ -96,7 +115,7 @@ int main(int argc, char** argv) {
 						}
 						break;
 					default: // 0NNN | RCA 1802 at address NNN
-						printf("0 %i\n", NNN);
+						printf("TODO 0NNN 0 %i\n", NNN);
 						break;
 				}
 				break;
@@ -209,7 +228,7 @@ int main(int argc, char** argv) {
 						registers[X] = delay_timer;
 						break;
 					case 0x0A: // FX0A | Vx = get_key()
-						printf("F %x 0A", X);
+						waitForKey = X;
 						break;
 					case 0x15: // FX15 | delay_timer(Vx)
 						delay_timer = registers[X];
@@ -221,10 +240,10 @@ int main(int argc, char** argv) {
 						I += registers[X];
 						break;
 					case 0x29: // FX29 | I = sprite_addr[Vx]
-						printf("F %x 29", X);
+						printf("TODO (FX29) F %x 29", X);
 						break;
 					case 0x33: // FX33 | set_BCD(Vx)
-						printf("F %x 33", X);
+						printf("TODO (FX33) F %x 33", X);
 						break;
 					case 0x55: // FX55 | reg_dump(Vx, &I);
 						memcpy(&memory[I], registers, X);
