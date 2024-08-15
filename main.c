@@ -1,12 +1,6 @@
 /*
 	TODO :
-	- fix bugs and make sure everything actually works
-	
-	- handle program end properly
-	handle instructions:
-		- 0NNN | RCA 1802 at address NNN
-		- FX29 | I = sprite_addr[Vx]
-		- FX33 | set_BCD(Vx)
+	- fix bugs and make sure everything actually works	
 */
 
 
@@ -110,7 +104,7 @@ int main(int argc, char** argv) {
 						}
 						break;
 					default: // 0NNN | RCA 1802 at address NNN
-						//printf("TODO 0NNN 0 %i\n", NNN);
+						printf("TODO 0NNN 0 %i\n", NNN);
 						break;
 				}
 				break;
@@ -231,10 +225,12 @@ int main(int argc, char** argv) {
 						I += registers[X];
 						break;
 					case 0x29: // FX29 | I = sprite_addr[Vx]
-						printf("TODO (FX29) F %x 29", X);
+						I = I + registers[X];
 						break;
 					case 0x33: // FX33 | set_BCD(Vx)
-						printf("TODO (FX33) F %x 33", X);
+						memory[I]     = registers[X] / 100;
+						memory[I+ 1] = (registers[X] / 10) % 10;
+						memory[I + 2] = registers[X] % 10;
 						break;
 					case 0x55: // FX55 | reg_dump(Vx, &I);
 						memcpy(&memory[I], registers, X);
