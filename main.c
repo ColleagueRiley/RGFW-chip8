@@ -1,7 +1,7 @@
 /*
 	TODO :
 	- fix bugs and make sure everything actually works
-	
+	- impplement beep()	
 */
 
 #define RGFW_BUFFER
@@ -18,6 +18,8 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 	
+	b8 oldFlag = (argc > 2 && argv[2][0] == '8');
+	
 	FILE* f = fopen(argv[1], "rb");
 
 	fseek(f, 0L, SEEK_END);
@@ -29,6 +31,8 @@ int main(int argc, char** argv) {
 
 	memcpy(&memory[size], fontset, FONT_SIZE);
 	
+	srand(time(NULL));
+
 	RGFW_setBufferSize(RGFW_AREA(SCREEN_WIDTH, SCREEN_HEIGHT));
 	RGFW_window* win = RGFW_createWindow("RGFW Chip-8", RGFW_RECT(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), RGFW_CENTER | RGFW_NO_RESIZE); 
 
@@ -65,9 +69,9 @@ int main(int argc, char** argv) {
 		}
 		
 		RGFW_window_swapBuffers(win);
+		
 		u16 opcode = (memory[PC] << 8) | memory[PC + 1];
-		
-		
+			
 		if (waitForKey != -1) {
 			RGFW_window_checkFPS(win, 60);
 			continue;
@@ -82,8 +86,10 @@ int main(int argc, char** argv) {
 		if (sound_timer)
 			sound_timer--;
 		
-		if (delay_timer)
+		if (delay_timer) {
 			delay_timer--;
+			beep();
+		}
 
 		u16 X = (opcode & 0x0F00) >> 8;
 		u16 Y = (opcode & 0x00F0) >> 4;
@@ -91,7 +97,7 @@ int main(int argc, char** argv) {
 		u16 NN = (opcode & 0x00FF);
 		i16 NNN = (opcode & 0x0FFF); 
 		
-		switch ((opcode & 0xF000)) {
+		switch (opcode & 0xF000) {
 			case 0x0000:
 				switch (NN) {
 					case 0xE0: { // 00E0 | clear()
@@ -100,8 +106,8 @@ int main(int argc, char** argv) {
 					}
 					case 0xEE: // 00EE | return 
 						if (stack_layer) {
-							PC = stack[stack_layer - 1];
 							stack_layer--;
+							PC = stack[stack_layer];
 						}
 						break;
 					default: // 0NNN | RCA 1802 at address NNN
@@ -113,61 +119,97 @@ int main(int argc, char** argv) {
 				PC = NNN;
 				break;
 			case 0x2000: // 2NNN | call function at NNN *(NNN)()
-				PC = NNN;
 				stack[stack_layer] = PC;
+				PC = NNN;
 				stack_layer++;
 				break;
 			case 0x3000: // 3XNN | if (Vx == NN)
-				if (registers[X] != NN)
-					PC += 2; // skip next line if false
-				break;
-			case 0x4000: // 4XNN | if (Vx != NN)
 				if (registers[X] == NN)
 					PC += 2; // skip next line if false
 				break;
+			case 0x4000: // 4XNN | if (Vx != NN)
+				if (registers[X] != NN)
+					PC += 2; // skip next line if false
+				break;
 			case 0x5000: // 5XY0 | if (Vx == Vy)
-				if (registers[X] != registers[Y])
+				if (registers[X] == registers[Y])
 					PC += 2;
 				break;
 			case 0x6000: // 6XNN | Vx = NN
-				registers[X] = (u16)NN;
+				registers[X] = (u8)NN;
 				break;
 			case 0x7000: // 7XNN | Vx += NN
-				registers[X] += (u16) NN;
+				registers[X] += (u8) NN;
 				break;
 			case 0x8000:
 				switch (N) {
-					case 0x0: // 8XY0 | Vx = Vy
+					case 0x0000: // 8XY0 | Vx = Vy
 						registers[X] = registers[Y];
 						break;		
-					case 0x1: // 8XY1 | Vx |= Ny
+					case 0x0001: // 8XY1 | Vx |= Ny
 						registers[X] |= registers[Y];
 						break;
-					case 0x2: // 8XY2 | Vx &= Vy
+					case 0x0002: // 8XY2 | Vx &= Vy
 						registers[X] &= registers[Y];
 						break;	
-					case 0x3: // 8XY3 | Vx ^= Vy
+					case 0x0003: // 8XY3 | Vx ^= Vy
 						registers[X] ^= registers[Y];
 						break;
-					case 0x4: // 8XY4 | Vx += Vy
+					case 0x0004: { // 8XY4 | Vx += Vy
+						if ((u16)((u16)registers[X] + (u16)registers[Y]) > 255) 
+							registers[15] = 1;
+						else
+							registers[15] = 0;
+
 						registers[X] += registers[Y];
 						break;
-					case 0x5: // 8XY5 | Vx -= Vy
+					}
+					case 0x0005: // 8XY5 | Vx -= Vy
+						if ((i16)((i16)registers[X] - (i16)registers[Y]) < 0) 
+							registers[15] = 1;
+						else
+							registers[15] = 0;
+						
 						registers[X] -= registers[Y];
 						break;
-					case 0x6: // 8XY6 | Vx >>= Vy
-						registers[X] >>= registers[Y];
+					case 0x0006: { // 8XY6 | Vx >> Vy
+						if(oldFlag){
+							registers[X] = registers[Y];
+						}
+						
+						registers[15] = registers[X] & 1;
+						registers[X] >>= 1;
+
 						break;
-					case 0x7: // 8XY7 | Vx = Vy - Vx
+					}
+					case 0x0007: // 8XY7 | Vx = Vy - Vx
+						if(registers[Y] < registers[Y] - registers[X])
+							registers[15] = 0;
+						else
+							registers[15] = 1;
+
 						registers[X] = registers[Y] - registers[X];
 						break;
-					case 0xE: // 8XYE | Vx <<= 1
+					case 0x000E: // 8XYE | Vx << Vy
+						if(oldFlag){
+							registers[X] = registers[Y];
+						}
+						
+						registers[15] = (registers[X] >> 7) & 1;
 						registers[X] <<= 1;
+
 						break;
-				}
-				break;
+					default:
+						// jump with offset
+						if(oldFlag) 
+							PC = NNN + registers[0];
+						else 
+							PC = NNN + registers[X];
+						break;
+					}
+					break;
 			case 0x9000: // 9XY0 | if (Vx != Vy)
-				if (registers[X] == registers[Y])
+				if (registers[X] != registers[Y])
 					PC += 2;
 				break;
 			case 0xA000: // ANNN | I = NNN
@@ -177,7 +219,7 @@ int main(int argc, char** argv) {
 				PC = registers[0] + NNN;
 				break;
 			case 0xC000: // CXNN | VX = rand() & NN
-				registers[X] = rand() % NN;
+				registers[X] = (rand() % NN) & NN;
 				break;
 			case 0xD000: { // DXYN | draw(Vx, Vy, N)
 				size_t x, y;
@@ -186,7 +228,7 @@ int main(int argc, char** argv) {
 				for (y = 0; y < 8; y++) {
 					pixel_row = memory[I + y];
 					for(x = 0; x < 8; x++) {
-						u8 pixel = (pixel_row & 0x80) >> x;
+						u8 pixel = (pixel_row & (0x80 >> x));
 						printf("0x%x\n", pixel_row);
 						if (drawPixel(win->buffer, registers[X] + x, registers[Y] + y, pixel * 255, 0)) 
 							registers[15] = 1;
@@ -229,7 +271,7 @@ int main(int argc, char** argv) {
 						I = I + registers[X];
 						break;
 					case 0x33: // FX33 | set_BCD(Vx)
-						memory[I]     = registers[X] / 100;
+						memory[I] = registers[X] / 100;
 						memory[I+ 1] = (registers[X] / 10) % 10;
 						memory[I + 2] = registers[X] % 10;
 						break;

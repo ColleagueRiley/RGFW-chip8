@@ -76,3 +76,7 @@ void clear(u8* buffer) {
 		}
 	}
 }
+
+void beep() {
+	printf("BEEEEP: sounds not added yet\n");	
+}
