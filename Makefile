@@ -37,7 +37,12 @@ output: main.c RGFW.h util.h
 clean:
 	rm -f output
 
+ROMS := $(wildcard roms/*.ch8)
+
 debug: output
 	make clean
 	make
-	./output $(ROM)
+	@for rom in $(ROMS); do \
+		echo "Running $$rom..."; \
+		./output $$rom; \
+	done

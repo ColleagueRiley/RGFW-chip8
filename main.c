@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
 		if (PC < size) {
 			PC += 2;
 		} else {
-			//printf("warning: reached end of program\n");
+			printf("warning: reached end of program\n");
 		}
 		
 		if (sound_timer)
@@ -90,8 +90,8 @@ int main(int argc, char** argv) {
 			beep();
 		}
 
-		u16 X = (opcode & 0x0F00);
-		u16 Y = (opcode & 0x00F0);
+		u16 X = (opcode & 0x0F00) >> 8;
+		u16 Y = (opcode & 0x00F0) >> 4;
 		u16 N = (opcode & 0x000F);
 		u16 NN = (opcode & 0x00FF);
 		i16 NNN = (opcode & 0x0FFF); 
@@ -111,7 +111,6 @@ int main(int argc, char** argv) {
 						}
 						break;
 					default: // 0NNN | RCA 1802 at address NNN
-						//printf("Warning: Unhandled: 0NNN 0 %i\n", NNN);
 						break;
 				}
 				break;
@@ -222,18 +221,15 @@ int main(int argc, char** argv) {
 				registers[X] = (rand() % NN) & NN;
 				break;
 			case 0xD000: { // DXYN | draw(Vx, Vy, N)
-				size_t x, y;
-				u8 pixel_row;
+				u8 pixel;
 				
-				for (y = 0; y < 8; y++) {
-					pixel_row = memory[I + y];
-					for(x = 0; x < 8; x++) {
-						u8 pixel = (pixel_row & (0x80 >> x));
-						
-						printf("0x%x\n", pixel_row);
-						printf("%i %i\n", registers[X] + x, registers[Y] + y);
-						if (drawPixel(win->buffer, registers[X] + x, registers[Y] + y, pixel * 255, 0)) 
-							registers[15] = 1;
+				size_t x, y;
+				registers[0xF] = 0;
+				for(y = 0; y < N; y++){
+					pixel = memory[I + y];
+					for(x = 0; x < 8; x++){
+						if((pixel & (0x80 >> x)) && drawPixel(win->buffer, x + registers[X], y + registers[Y], 255, 0))
+							registers[0xF] = 1;
 					}
 				}
 				

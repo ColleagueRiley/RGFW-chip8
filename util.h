@@ -54,16 +54,16 @@ b8 drawPixel(u8* buffer, u32 x, u32 y, u8 color, u8 force) {
 	y *= SCREEN_SCALE;
 	
 	size_t offset = ((y * SCREEN_WIDTH) + x) * 4;
-	if (buffer[offset] == color && force == RGFW_FALSE)
+	if (buffer[offset] == 255 && force == RGFW_FALSE)
 		return RGFW_FALSE;
 	
 	u32 X, Y; 
 	for (Y = 0; Y < SCREEN_SCALE; Y++) {
 		for (X = 0; X < SCREEN_SCALE; X++) {
 			offset = (((y + Y) * SCREEN_WIDTH) + (x + X)) * 4;
-			buffer[offset] = color;
-			buffer[offset + 1] = color;
-			buffer[offset + 2] = color;
+			buffer[offset] ^= color;
+			buffer[offset + 1] ^= color;
+			buffer[offset + 2] ^= color;
 			buffer[offset + 3] = 0xFF;
 		}
 	}
