@@ -611,8 +611,11 @@ typedef struct RGFW_window {
 /** * @defgroup Window_management
 * @{ */ 
 
-/*! this has to be set before createWindow is called, else the fulscreen size is used */
+/*! these have to be set before createWindow is called, else the fulscreen size is used */
 RGFWDEF void RGFW_setBufferSize(RGFW_area size); /*!< the buffer cannot be resized (by RGFW) */
+
+/*! sets the buffer's depth (i.e number of channels, 1-4) */
+RGFWDEF void RGFW_setBufferDepth(u8 depth);
 
 RGFW_window* RGFW_createWindow(
 	const char* name, /* name of the window */
@@ -1580,10 +1583,15 @@ b8 RGFW_Error(void) { return RGFW_error; }
 }
 	
 RGFW_area RGFW_bufferSize = {0, 0};
+u8 RGFW_bufferDepth = 4;
+
 void RGFW_setBufferSize(RGFW_area size) {
 	RGFW_bufferSize = size;
 }
 
+void RGFW_setBufferDepth(u8 depth) {
+	RGFW_bufferDepth = depth;
+}
 
 RGFWDEF RGFW_window* RGFW_window_basic_init(RGFW_rect rect, u16 args);
 
@@ -2384,18 +2392,25 @@ Start of Linux / Unix defines
 		if (RGFW_bufferSize.w == 0 && RGFW_bufferSize.h == 0)
 			RGFW_bufferSize = RGFW_getScreenSize();
 		
-		win->buffer = (u8*)RGFW_MALLOC(RGFW_bufferSize.w * RGFW_bufferSize.h * 4);
+		win->buffer = (u8*)RGFW_MALLOC(RGFW_bufferSize.w * RGFW_bufferSize.h * RGFW_bufferDepth);
 
 		#ifdef RGFW_OSMESA
-				win->src.ctx = OSMesaCreateContext(OSMESA_RGBA, NULL);
+				u32 depth = OSMESA_RGBA;
+				switch (RGFW_bufferDepth) {
+					case 1: depth = GL_RED; break;
+					case 2: detph = GL_RG; break;
+					case 3: depth = OSMESA_RGB; break;
+					default: break;
+				}
+				win->src.ctx = OSMesaCreateContext(depth, NULL);
 				OSMesaMakeCurrent(win->src.ctx, win->buffer, GL_UNSIGNED_BYTE, win->r.w, win->r.h);
 		#endif
-
+		
 		win->src.bitmap = XCreateImage(
 			win->src.display, XDefaultVisual(win->src.display, vi->screen),
 			vi->depth,
 			ZPixmap, 0, NULL, RGFW_bufferSize.w, RGFW_bufferSize.h,
-			32, 0
+			RGFW_bufferDepth * 8, 0
 		);
 
 		win->src.gc = XCreateGC(win->src.display, win->src.window, 0, NULL);
@@ -2550,7 +2565,11 @@ Start of Linux / Unix defines
 		viNorm.depth = 0;
 		XVisualInfo* vi = &viNorm;
 		
-		XMatchVisualInfo((Display*) win->src.display, DefaultScreen((Display*) win->src.display), 32, TrueColor, vi); /*!< for RGBA backgrounds*/
+		u32 format = TrueColor;
+		if (RGFW_bufferDepth < 3)
+			format = PseudoColor;
+
+		XMatchVisualInfo((Display*) win->src.display, DefaultScreen((Display*) win->src.display), RGFW_bufferDepth * 8, format, vi); /*!< for RGBA backgrounds*/
 #endif
 		/* make X window attrubutes*/
 		XSetWindowAttributes swa;
@@ -3829,7 +3848,7 @@ Start of Linux / Unix defines
 
 	void RGFW_window_swapBuffers(RGFW_window* win) {
 		assert(win != NULL);
-
+		
 		/* clear the window*/
 		if (!(win->_winArgs & RGFW_NO_CPU_RENDER)) {
 #if defined(RGFW_OSMESA) || defined(RGFW_BUFFER)
@@ -3838,17 +3857,18 @@ Start of Linux / Unix defines
 			#endif
 			RGFW_area area = RGFW_bufferSize;
 
-#ifndef RGFW_X11_DONT_CONVERT_BGR
 			win->src.bitmap->data = (char*) win->buffer;
-			u32 x, y;
-			for (y = 0; y < (u32)win->r.h; y++) {
-				for (x = 0; x < (u32)win->r.w; x++) {
-					u32 index = (y * 4 * area.w) + x * 4;
+#ifndef RGFW_X11_DONT_CONVERT_BGR
+			if (RGFW_bufferDepth >= 3) {
+				u32 x, y;
+				for (y = 0; y < (u32)win->r.h; y++) {
+					for (x = 0; x < (u32)win->r.w; x++) {
+						u32 index = (y * 4 * area.w) + x * 4;
 
-					u8 red = win->src.bitmap->data[index];
-					win->src.bitmap->data[index] = win->buffer[index + 2];
-					win->src.bitmap->data[index + 2] = red;
-
+						u8 red = win->src.bitmap->data[index];
+						win->src.bitmap->data[index] = win->buffer[index + 2];
+						win->src.bitmap->data[index + 2] = red;
+					}
 				}
 			}
 #endif	
@@ -4613,7 +4633,15 @@ static const struct wl_callback_listener wl_surface_frame_listener = {
 			}
 	
 			#if defined(RGFW_OSMESA)
-					win->src.ctx = OSMesaCreateContext(OSMESA_RGBA, NULL);
+					u32 depth = OSMESA_RGBA;
+					switch (RGFW_bufferDepth) {
+						case 1: depth = GL_RED; break;
+						case 2: detph = GL_RG; break;
+						case 3: depth = OSMESA_RGB; break;
+						default: break;
+					}
+					win->src.ctx = OSMesaCreateContext(depth, NULL);
+
 					OSMesaMakeCurrent(win->src.ctx, win->buffer, GL_UNSIGNED_BYTE, win->r.w, win->r.h);
 			#endif
 		#else
@@ -5205,12 +5233,17 @@ static HMODULE wglinstance = NULL;
 	bi.bV5Width = RGFW_bufferSize.w;
 	bi.bV5Height = -((LONG) RGFW_bufferSize.h);
 	bi.bV5Planes = 1;
-	bi.bV5BitCount = 32;
+	bi.bV5BitCount = RGFW_bufferDepth * 8;
 	bi.bV5Compression = BI_BITFIELDS;
-	bi.bV5BlueMask = 0x00ff0000;
-	bi.bV5GreenMask = 0x0000ff00;
-	bi.bV5RedMask = 0x000000ff;
-	bi.bV5AlphaMask = 0xff000000;
+	
+	if (RGFW_bufferDepth >= 3) {
+		bi.bV5BlueMask = 0x00ff0000;
+		bi.bV5GreenMask = 0x0000ff00;
+		bi.bV5RedMask = 0x000000ff;
+	}
+
+	if (RGFW_bufferDepth == 4)
+		bi.bV5AlphaMask = 0xff000000;
 
 	win->src.bitmap = CreateDIBSection(win->src.hdc,
 		(BITMAPINFO*) &bi,
@@ -5222,7 +5255,15 @@ static HMODULE wglinstance = NULL;
 	win->src.hdcMem = CreateCompatibleDC(win->src.hdc);
 
 	#if defined(RGFW_OSMESA)
-	win->src.ctx = OSMesaCreateContext(OSMESA_RGBA, NULL);
+	u32 depth = OSMESA_RGBA;
+	switch (RGFW_bufferDepth) {
+		case 1: depth = GL_RED; break;
+		case 2: detph = GL_RG; break;
+		case 3: depth = OSMESA_RGB; break;
+		default: break;
+	}
+	win->src.ctx = OSMesaCreateContext(depth, NULL);
+
 	OSMesaMakeCurrent(win->src.ctx, win->buffer, GL_UNSIGNED_BYTE, win->r.w, win->r.h);
 	#endif
 #else
@@ -7208,10 +7249,18 @@ RGFW_UNUSED(win); /*!< if buffer rendering is not being used */
 			if (RGFW_bufferSize.w == 0 && RGFW_bufferSize.h == 0)
 				RGFW_bufferSize = RGFW_getScreenSize();
 				
-			win->buffer = RGFW_MALLOC(RGFW_bufferSize.w * RGFW_bufferSize.h * 4);
+			win->buffer = RGFW_MALLOC(RGFW_bufferSize.w * RGFW_bufferSize.h * RGFW_bufferDepth);
 
 		#ifdef RGFW_OSMESA
-				win->src.ctx = OSMesaCreateContext(OSMESA_RGBA, NULL);
+				u32 depth = OSMESA_RGBA;
+				switch (RGFW_bufferDepth) {
+					case 1: depth = GL_RED; break;
+					case 2: detph = GL_RG; break;
+					case 3: depth = OSMESA_RGB; break;
+					default: break;
+				}
+				win->src.ctx = OSMesaCreateContext(depth, NULL);
+
 				OSMesaMakeCurrent(win->src.ctx, win->buffer, GL_UNSIGNED_BYTE, win->r.w, win->r.h);
 		#endif
 		#else
@@ -8105,13 +8154,18 @@ RGFW_UNUSED(win); /*!< if buffer rendering is not being used */
 	CGImageRef createImageFromBytes(unsigned char *buffer, int width, int height)
 	{
 		// Define color space
-        CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-        // Create bitmap context
+        CGColorSpaceRef colorSpace;		
+		if (RGFW_bufferDepth >= 3)
+			colorSpace = CGColorSpaceCreateDeviceRGB();
+		else
+			colorSpace = CGColorSpaceCreateDeviceRGB();
+
+		// Create bitmap context
         CGContextRef context = CGBitmapContextCreate(
         		buffer, 
         		width, height,
         		8,
-        		RGFW_bufferSize.w * 4, 
+        		RGFW_bufferSize.w * RGFW_bufferDepth, 
         		colorSpace,
         		kCGImageAlphaPremultipliedLast);
         // Create image from bitmap context
@@ -8470,11 +8524,7 @@ void RGFW_init_buffer(RGFW_window* win) {
 		if (RGFW_bufferSize.w == 0 && RGFW_bufferSize.h == 0)
 			RGFW_bufferSize = RGFW_getScreenSize();
 		
-		win->buffer = RGFW_MALLOC(RGFW_bufferSize.w * RGFW_bufferSize.h * 4);
-	#ifdef RGFW_OSMESA
-			win->src.ctx = OSMesaCreateContext(OSMESA_RGBA, NULL);
-			OSMesaMakeCurrent(win->src.ctx, win->buffer, GL_UNSIGNED_BYTE, win->r.w, win->r.h);
-	#endif
+		win->buffer = RGFW_MALLOC(RGFW_bufferSize.w * RGFW_bufferSize.h * RGFW_bufferDepth);
 	#else
 	RGFW_UNUSED(win); /*!< if buffer rendering is not being used */
 	#endif
@@ -8813,6 +8863,14 @@ void RGFW_window_swapBuffers(RGFW_window* win) {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		
+		u8 depth = GL_RGBA;
+		switch (RGFW_bufferDepth) {
+			case 1: depth = GL_RED;
+			case 2: depth = GL_RG;
+			case 3: depth = GL_RGB;
+			default: break;
+		}
 
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, RGFW_bufferSize.w, RGFW_bufferSize.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, win->buffer);
 		

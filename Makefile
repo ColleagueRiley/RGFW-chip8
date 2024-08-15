@@ -11,6 +11,8 @@ OS_DIR = \\
 
 detected_OS = windows
 
+ROM := TETRIS.ch8
+
 # not using a cross compiler
 ifeq (,$(filter $(CC),x86_64-w64-mingw32-gcc i686-w64-mingw32-gcc x86_64-w64-mingw32-g++ /opt/msvc/bin/x64/cl.exe /opt/msvc/bin/x86/cl.exe))
 	detected_OS := $(shell uname 2>/dev/null || echo Unknown)
@@ -36,5 +38,5 @@ clean:
 	rm -f output
 
 debug: output
-	./output TETRIS.ch8
+	./output $(ROM)
 	make clean

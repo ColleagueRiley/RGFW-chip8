@@ -1,33 +1,25 @@
+/*
+	TODO :
+	- fix bugs and make sure everything actually works
+	- upscale rendering (so the window can be bigger than 64x32
+	- run sound/delay timer
+	- cap framerate? 
+	
+	- handle program end properly
+	handle instructions:
+		- 0NNN | RCA 1802 at address NNN
+		- FX29 | I = sprite_addr[Vx]
+		- FX33 | set_BCD(Vx)
+*/
+
+
 #define RGFW_BUFFER
 #define RGFW_IMPLEMENTATION
 #include "RGFW.h"
 
+#include "util.h"
+
 u8 memory[4096];
-
-void clear(RGFW_window* win) {
-	size_t index;
-	for (index = 0; index < win->r.w * win->r.h * 4; index += 4) {
-		win->buffer[index] = 0x00;
-		win->buffer[index + 1] = 0x00;
-		win->buffer[index + 2] = 0x00;
-		win->buffer[index + 3] = 0xFF;
-	}	
-}
-
-RGFW_ENUM(u8, c8_key) {
-	c8_0 = 0, c8_1, c8_2, c8_3, c8_4, c8_5, c8_6, c8_9, 
-	c8_a, c8_b, c8_c, c8_d, c8_e, ch8_f,
-	c8_last
-};
-
-u8 c8_keymap[c8_last] = { 0 };
-
-u8 RGFW_c8_LUT[] =  {
-	[RGFW_1] = 0x1, [RGFW_2] = 0x2, [RGFW_3] = 0x3, [RGFW_4] = 0xC,
-	[RGFW_q] = 0x4, [RGFW_w] = 0x5,  [RGFW_e] = 0x6, [RGFW_r] = 0xD,  
-	[RGFW_a] = 0x7, [RGFW_s] = 0x8, [RGFW_d] = 0x9, [RGFW_f] = 0xE,
-	[RGFW_z] = 0xA, [RGFW_x] = 0x0, [RGFW_c] = 0xB, [RGFW_v] = 0xF
-};
 
 int main(int argc, char** argv) {
 	if (argc <= 1) {
@@ -42,20 +34,15 @@ int main(int argc, char** argv) {
 	fseek(f, 0L, SEEK_SET);
 
 	fread(&memory, 1, size, f);
+	fclose(f);
+
+	memcpy(&memory[size], fontset, FONT_SIZE);
 	
-	RGFW_setBufferSize(RGFW_AREA(64, 32));
-	RGFW_window* win = RGFW_createWindow("RGFW Chip-8", RGFW_RECT(0, 0, 64, 32), RGFW_CENTER | RGFW_NO_RESIZE); 
+	RGFW_setBufferSize(RGFW_AREA(SCREEN_WIDTH, SCREEN_HEIGHT));
+	RGFW_window* win = RGFW_createWindow("RGFW Chip-8", RGFW_RECT(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), RGFW_CENTER | RGFW_NO_RESIZE); 
 
-	clear(win);
+	clear(win->buffer);
 
-	size_t index;
-	for (index = 0; index < win->r.w * win->r.h * 4; index += 4) {
-		win->buffer[index] = 0x00;
-		win->buffer[index + 1] = 0x00;
-		win->buffer[index + 2] = 0x00;
-		win->buffer[index + 3] = 0xFF;
-	}
-						
 	u16 PC = 0;
 	u8 registers[16];
 	u16 stack[16];
@@ -67,7 +54,7 @@ int main(int argc, char** argv) {
 	i8 waitForKey = 0;
 
 	while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
-		while (RGFW_window_checkEvent(win) != NULL); {
+		while (RGFW_window_checkEvent(win) != NULL) {
 			switch (win->event.type) {
 				case RGFW_quit: break;
 				case RGFW_keyPressed:
@@ -88,24 +75,24 @@ int main(int argc, char** argv) {
 		RGFW_window_swapBuffers(win);
 		u16 opcode = (memory[PC] << 8) | memory[PC + 1];
 		
-		if (PC == size || waitForKey != -1)
-			continue;
+		//if (PC == size || waitForKey != -1)
+		//	continue;
 	
 		if (PC < size) {
 			PC += 2;
 		}
 
-		u16 X = opcode & 0x0F00;
-		u16 Y = (0x00F0 & opcode);
-		u16 N = 0x000F & opcode;
-		u16 NN = 0x00FF & opcode;
-		i16 NNN = 0x0FFF & opcode; 
-
+		u16 X = (opcode & 0x0F00) >> 8;
+		u16 Y = (opcode & 0x00F0) >> 4;
+		u16 N = (opcode & 0x000F);
+		u16 NN = (opcode & 0x00FF);
+		i16 NNN = (opcode & 0x0FFF); 
+		
 		switch ((opcode & 0xF000)) {
 			case 0x0000:
 				switch (NN) {
 					case 0xE0: { // 00E0 | clear()
-						clear(win);
+						clear(win->buffer);
 						break;
 					}
 					case 0xEE: // 00EE | return 
@@ -115,7 +102,7 @@ int main(int argc, char** argv) {
 						}
 						break;
 					default: // 0NNN | RCA 1802 at address NNN
-						printf("TODO 0NNN 0 %i\n", NNN);
+						//printf("TODO 0NNN 0 %i\n", NNN);
 						break;
 				}
 				break;
@@ -190,20 +177,16 @@ int main(int argc, char** argv) {
 				registers[X] = rand() % NN;
 				break;
 			case 0xD000: { // DXYN | draw(Vx, Vy, N)
-				size_t w, h, i;
-				size_t offset = 0;
-
-				u8 pixel;
-				for (h = 0; h < 8; h++) {
-					pixel = memory[I + h];
-					for(w = 0; w < 8; w++){
-						if((pixel & (0x80 >> w)) != 0){
-							if(win->buffer[registers[X] + h + ((registers[Y] + w) * win->r.w) + offset] == 1){
-								registers[15] = 1;
-							}	
-							win->buffer[(registers[X] + h + ((registers[Y] + w) * win->r.w)) + offset] ^= 1;
-							offset += 4;
-						}
+				size_t x, y;
+				u8 pixel_row;
+				break;
+				for (y = 0; y < 8; y++) {
+					pixel_row = memory[I + y];
+					for(x = 0; x < 8; x++) {
+						u8 pixel = (pixel_row & 0x80) >> x;
+						printf("0x%x\n", pixel_row);
+						if (drawPixel(win->buffer, registers[X] + x, registers[Y] + y, pixel * 255)) 
+							registers[15] = 1;
 					}
 				}
 				break;
