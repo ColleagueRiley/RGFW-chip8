@@ -1,8 +1,8 @@
 /*
 	TODO :
-	- fix bugs and make sure everything actually works	
+	- fix bugs and make sure everything actually works
+	
 */
-
 
 #define RGFW_BUFFER
 #define RGFW_IMPLEMENTATION
@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
 	u8 sound_timer = 0;
 	u16 I;
 
-	i8 waitForKey = 0;
+	i8 waitForKey = -1;
 
 	while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
 		while (RGFW_window_checkEvent(win) != NULL) {
@@ -67,15 +67,16 @@ int main(int argc, char** argv) {
 		RGFW_window_swapBuffers(win);
 		u16 opcode = (memory[PC] << 8) | memory[PC + 1];
 		
-		/*
-		if (PC == size || waitForKey != -1) {
+		
+		if (waitForKey != -1) {
 			RGFW_window_checkFPS(win, 60);
 			continue;
 		}
-		*/
 
 		if (PC < size) {
 			PC += 2;
+		} else {
+			printf("warning: reached end of program\n");
 		}
 		
 		if (sound_timer)
@@ -104,7 +105,7 @@ int main(int argc, char** argv) {
 						}
 						break;
 					default: // 0NNN | RCA 1802 at address NNN
-						printf("TODO 0NNN 0 %i\n", NNN);
+						printf("Warning: Unhandled: 0NNN 0 %i\n", NNN);
 						break;
 				}
 				break;
