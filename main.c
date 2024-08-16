@@ -9,6 +9,11 @@
 
 #include "util.h"
 
+#include <time.h>
+#include <sys/time.h>
+
+#define RGFW_getTimeMS() (u32)((u64)RGFW_getTimeNS() / 1e+6)
+
 b8 screen[C8_SCREEN_WIDTH * C8_SCREEN_HEIGHT];
 
 u8 memory[4096];
@@ -52,6 +57,7 @@ int main(int argc, char** argv) {
 	i8 waitForKey = -1;
 	
 	b8 draw_queue = RGFW_FALSE;
+	u32 lastTime = RGFW_getTimeMS();
 
 	while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
 		while (RGFW_window_checkEvent(win) != NULL) {
@@ -63,7 +69,6 @@ int main(int argc, char** argv) {
 					if (waitForKey != -1) {
 						registers[waitForKey] = RGFW_c8_LUT[win->event.keyCode]; 
 						waitForKey = -1;
-						PC += 2;
 					}
 					break;
 				case RGFW_keyReleased:
@@ -85,15 +90,22 @@ int main(int argc, char** argv) {
 		
 		u16 opcode = (memory[PC] << 8) | memory[PC + 1];
 		PC += 2;
-		 
-		if (sound_timer)
-			sound_timer--;
-		
-		if (delay_timer) {
-			delay_timer--;
-			beep();
-		}
+			
+		/* tick the timer */ 
+		u32 time = RGFW_getTimeMS();
 
+		if (((time - lastTime)) >= ((float)(1.0f / 60.0f)) * 1000 ) {
+			if (sound_timer)
+				sound_timer--;
+		
+			if (delay_timer) {
+				delay_timer--;
+				beep();
+			}
+
+			lastTime = time;
+		}
+		
 		u16 X = (opcode & 0x0F00) >> 8;
 		u16 Y = (opcode & 0x00F0) >> 4;
 		u16 N = (opcode & 0x000F);
@@ -227,6 +239,9 @@ int main(int argc, char** argv) {
 			case 0xD000: { // DXYN | draw(Vx, Vy, N)
 				u8 pixel;
 				
+				if (registers[X] >= C8_SCREEN_WIDTH || (registers[Y] >= C8_SCREEN_HEIGHT)) 
+					break;
+				
 				size_t x, y;
 				registers[0xF] = 0;
 				for(y = 0; y < N; y++){
@@ -298,9 +313,7 @@ int main(int argc, char** argv) {
 				break;
 			default: break;
 		}
-			
-		RGFW_window_checkFPS(win, 60);
-	}
-
+		RGFW_window_checkFPS(win, 200);
+	}	
 	RGFW_window_close(win);
 }
