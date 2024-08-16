@@ -14,6 +14,7 @@
 #define SCREEN_WIDTH C8_SCREEN_WIDTH * SCREEN_SCALE
 #define SCREEN_HEIGHT C8_SCREEN_HEIGHT * SCREEN_SCALE
 
+
 RGFW_ENUM(u8, c8_key) {
 	c8_0 = 0, c8_1, c8_2, c8_3, c8_4, c8_5, c8_6, c8_9, 
 	c8_a, c8_b, c8_c, c8_d, c8_e, ch8_f,
@@ -22,7 +23,7 @@ RGFW_ENUM(u8, c8_key) {
 
 u8 c8_keymap[c8_last] = { 0 };
 
-u8 RGFW_c8_LUT[] =  {
+u8 RGFW_c8_LUT[RGFW_final_key] =  {
 	[RGFW_1] = 0x1, [RGFW_2] = 0x2, [RGFW_3] = 0x3, [RGFW_4] = 0xC,
 	[RGFW_q] = 0x4, [RGFW_w] = 0x5,  [RGFW_e] = 0x6, [RGFW_r] = 0xD,  
 	[RGFW_a] = 0x7, [RGFW_s] = 0x8, [RGFW_d] = 0x9, [RGFW_f] = 0xE,
@@ -49,37 +50,34 @@ const u8 fontset[FONT_SIZE] = {
 	0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 };
 
-b8 drawPixel(u8* buffer, u32 x, u32 y, u8 color, u8 force) {
-	x *=  SCREEN_SCALE;
-	y *= SCREEN_SCALE;
+void draw(u8* buffer, u8* screen) {
+	size_t c8_x, c8_y;
+	for (c8_y = 0; c8_y < C8_SCREEN_HEIGHT; c8_y++) {
+		for (c8_x = 0; c8_x < C8_SCREEN_WIDTH; c8_x++) {
+			u32 x = c8_x * SCREEN_SCALE;
+			u32 y = c8_y * SCREEN_SCALE;
 	
-	size_t offset = ((y * SCREEN_WIDTH) + x) * 4;
-	if (buffer[offset] == 255 && force == RGFW_FALSE)
-		return RGFW_FALSE;
-	
-	u32 X, Y; 
-	for (Y = 0; Y < SCREEN_SCALE; Y++) {
-		for (X = 0; X < SCREEN_SCALE; X++) {
-			offset = (((y + Y) * SCREEN_WIDTH) + (x + X)) * 4;
-			buffer[offset] ^= color;
-			buffer[offset + 1] ^= color;
-			buffer[offset + 2] ^= color;
-			buffer[offset + 3] = 0xFF;
-		}
-	}
-	
-	return RGFW_TRUE;
-}
+			b8 ret = RGFW_TRUE;
 
-void clear(u8* buffer) {
-	u32 x, y;
-	for (y = 0; y < C8_SCREEN_HEIGHT; y++) {
-		for (x = 0; x < C8_SCREEN_WIDTH; x++) {
-			drawPixel(buffer, x, y, 0, 1);
+			size_t offset = ((y * SCREEN_WIDTH) + x) * 4;
+			if ((buffer[offset + 1] || buffer[offset + 2])) {
+				ret = RGFW_FALSE;
+			}
+
+			u32 X, Y; 
+			for (Y = 0; Y < SCREEN_SCALE; Y++) {
+				for (X = 0; X < SCREEN_SCALE; X++) {
+					offset = (((y + Y) * SCREEN_WIDTH) + (x + X)) * 4;
+					buffer[offset] = screen[(c8_y * C8_SCREEN_WIDTH) + c8_x] * 255;
+					buffer[offset + 1] = screen[(c8_y * C8_SCREEN_WIDTH) + c8_x] * 255;
+					buffer[offset + 2] = screen[(c8_y * C8_SCREEN_WIDTH) + c8_x] * 255;
+					buffer[offset + 3] = 255;
+				}
+			}
 		}
-	}
+	}		
 }
 
 void beep() {
-	printf("BEEEEP: sounds not added yet\n");	
+
 }

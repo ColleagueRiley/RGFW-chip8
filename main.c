@@ -1,6 +1,7 @@
 /*
 	TODO :
 	- fix bugs and make sure everything actually works
+	- color pallets
 	- impplement beep()	
 */
 
@@ -9,6 +10,8 @@
 #include "RGFW.h"
 
 #include "util.h"
+
+b8 screen[C8_SCREEN_WIDTH * C8_SCREEN_HEIGHT];
 
 u8 memory[4096];
 
@@ -37,7 +40,7 @@ int main(int argc, char** argv) {
 	RGFW_window* win = RGFW_createWindow("RGFW Chip-8", RGFW_RECT(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), RGFW_CENTER | RGFW_NO_RESIZE); 
 
 
-	clear(win->buffer);
+	memset(screen, 0, C8_SCREEN_WIDTH * C8_SCREEN_HEIGHT);	
 	RGFW_window_swapBuffers(win);
 
 	u16 PC = 0x200;
@@ -49,17 +52,20 @@ int main(int argc, char** argv) {
 	u16 I;
 
 	i8 waitForKey = -1;
+	
+	b8 draw_queue = RGFW_FALSE;
 
 	while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
 		while (RGFW_window_checkEvent(win) != NULL) {
 			switch (win->event.type) {
 				case RGFW_quit: break;
-				case RGFW_keyPressed:
+				case RGFW_keyPressed:	
 					c8_keymap[ RGFW_c8_LUT[win->event.keyCode] ] = 1;
 				
 					if (waitForKey != -1) {
 						registers[waitForKey] = RGFW_c8_LUT[win->event.keyCode]; 
 						waitForKey = -1;
+						PC += 2;
 					}
 					break;
 				case RGFW_keyReleased:
@@ -68,20 +74,20 @@ int main(int argc, char** argv) {
 				defualt: break;	
 			}
 		}
-				
-		u16 opcode = (memory[PC] << 8) | memory[PC + 1];
+		
+		if (draw_queue) {
+			draw(win->buffer, screen);
+			RGFW_window_swapBuffers(win);
+			draw_queue = RGFW_FALSE;
+		}
 			
 		if (waitForKey != -1) {
-			RGFW_window_checkFPS(win, 60);
 			continue;
 		}
-
-		if (PC < size) {
-			PC += 2;
-		} else {
-			printf("warning: reached end of program\n");
-		}
 		
+		u16 opcode = (memory[PC] << 8) | memory[PC + 1];
+		PC += 2;
+		 
 		if (sound_timer)
 			sound_timer--;
 		
@@ -99,9 +105,9 @@ int main(int argc, char** argv) {
 		switch (opcode & 0xF000) {
 			case 0x0000:
 				switch (NN) {
-					case 0xE0: { // 00E0 | clear()
-						clear(win->buffer);
-						RGFW_window_swapBuffers(win);
+					case 0xE0: { // 00E0 | clear()	
+						memset(screen, 0, C8_SCREEN_WIDTH * C8_SCREEN_HEIGHT);	
+						draw_queue = RGFW_TRUE;
 						break;
 					}
 					case 0xEE: // 00EE | return 
@@ -223,27 +229,34 @@ int main(int argc, char** argv) {
 			case 0xD000: { // DXYN | draw(Vx, Vy, N)
 				u8 pixel;
 				
+				//if (registers[X] >= C8_SCREEN_WIDTH || registers[Y] >= C8_SCREEN_HEIGHT)
+				//	break;
+
 				size_t x, y;
 				registers[0xF] = 0;
 				for(y = 0; y < N; y++){
 					pixel = memory[I + y];
-					for(x = 0; x < 8; x++){
-						if((pixel & (0x80 >> x)) && drawPixel(win->buffer, x + registers[X], y + registers[Y], 255, 0))
-							registers[0xF] = 1;
+					for(x = 0; x < 8; x++) {
+						if((pixel & (0x80 >> x))) {
+							if (screen[((registers[Y] + y) * C8_SCREEN_WIDTH) + (registers[X] + x)])
+								registers[0xF] = 1;
+						
+							screen[((registers[Y] + y) * C8_SCREEN_WIDTH) + (registers[X] + x)] ^= 1;
+						}
 					}
 				}
 				
-				RGFW_window_swapBuffers(win);
+				draw_queue = RGFW_TRUE;
 				break;
 			}
 			case 0xE000:
-				switch (Y) {
+				switch (NN) {
 					case 0x9E: // EX9E | if (key() == Vx)
-						if (c8_keymap[X] == 0)
+						if (c8_keymap[registers[X]])
 							PC += 2;
 						break;
 					case 0xA1: // EXA1 | if (key != Vx)
-						if (c8_keymap[X])
+						if (c8_keymap[registers[X]] == 0)
 							PC += 2;
 						break;
 					default: break;
@@ -253,7 +266,7 @@ int main(int argc, char** argv) {
 			case 0xF000:
 				switch (NN) {
 					case 0x07: // FX07 | Vx = get_delay() 
-						registers[X] = delay_timer;
+						registers[X] = delay_timer;	
 						break;
 					case 0x0A: // FX0A | Vx = get_key()
 						waitForKey = X;
