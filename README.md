@@ -20,3 +20,8 @@ to run a rom with the old flag enabled
 # roms 
 The testing roms were sourced from [Chip-8 test suite](https://github.com/Timendus/chip8-test-suite/tree/main) on github
 
+# resources
+[Chip-8 test suite](https://github.com/Timendus/chip8-test-suite/tree/main)
+
+[Wikipedia](https://en.wikipedia.org/wiki/CHIP-8)
+
