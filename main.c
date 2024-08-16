@@ -1,16 +1,8 @@
-/*
-	TODO :
-	- implement beep()	
-*/
-
 #define RGFW_BUFFER
 #define RGFW_IMPLEMENTATION
 #include "RGFW.h"
 
 #include "util.h"
-
-#include <time.h>
-#include <sys/time.h>
 
 #define RGFW_getTimeMS() (u32)((u64)RGFW_getTimeNS() / 1e+6)
 
