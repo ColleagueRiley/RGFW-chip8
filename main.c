@@ -1,8 +1,6 @@
 /*
 	TODO :
-	- fix bugs and make sure everything actually works
-	- color pallets
-	- impplement beep()	
+	- implement beep()	
 */
 
 #define RGFW_BUFFER
@@ -229,9 +227,6 @@ int main(int argc, char** argv) {
 			case 0xD000: { // DXYN | draw(Vx, Vy, N)
 				u8 pixel;
 				
-				//if (registers[X] >= C8_SCREEN_WIDTH || registers[Y] >= C8_SCREEN_HEIGHT)
-				//	break;
-
 				size_t x, y;
 				registers[0xF] = 0;
 				for(y = 0; y < N; y++){

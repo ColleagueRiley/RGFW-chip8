@@ -63,14 +63,18 @@ void draw(u8* buffer, u8* screen) {
 			if ((buffer[offset + 1] || buffer[offset + 2])) {
 				ret = RGFW_FALSE;
 			}
-
+			
+			b8 flipColor = RGFW_FALSE;
+			if ((x >= 160 && x <= 220) || (x >= 320 && x <= 400) || (x >= 480)) 
+				flipColor = RGFW_TRUE;
+		
 			u32 X, Y; 
 			for (Y = 0; Y < SCREEN_SCALE; Y++) {
 				for (X = 0; X < SCREEN_SCALE; X++) {
 					offset = (((y + Y) * SCREEN_WIDTH) + (x + X)) * 4;
-					buffer[offset] = screen[(c8_y * C8_SCREEN_WIDTH) + c8_x] * 255;
+					buffer[offset] = (!flipColor) ? screen[(c8_y * C8_SCREEN_WIDTH) + c8_x] * 255  : 0;
 					buffer[offset + 1] = screen[(c8_y * C8_SCREEN_WIDTH) + c8_x] * 255;
-					buffer[offset + 2] = screen[(c8_y * C8_SCREEN_WIDTH) + c8_x] * 255;
+					buffer[offset + 2] = (flipColor) ? screen[(c8_y * C8_SCREEN_WIDTH) + c8_x] * 255 : 0;
 					buffer[offset + 3] = 255;
 				}
 			}
